@@ -1,0 +1,16 @@
+{
+  "required": true,
+  "package": "com.bunting.packagerchoked.mixin",
+  "refmap": "packagerchoked.mixins.refmap.json",
+  "compatibilityLevel": "JAVA_21",
+  "minVersion": "0.8",
+  "client": [
+  ],
+  "mixins": [
+    "MixinPackageItem",
+    "MixinPackagerBlockEntity"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
