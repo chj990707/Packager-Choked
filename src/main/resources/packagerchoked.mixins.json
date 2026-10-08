@@ -7,7 +7,6 @@
   "client": [
   ],
   "mixins": [
-    "MixinPackageItem",
     "MixinPackagerBlockEntity"
   ],
   "injectors": {

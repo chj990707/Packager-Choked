@@ -4,6 +4,7 @@ import com.bunting.packagerchoked.PackagerChokedConfig;
 import com.bunting.packagerchoked.StackNumberUtil;
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import com.mojang.logging.LogUtils;
 import com.simibubi.create.content.logistics.box.PackageItem;
 import com.simibubi.create.content.logistics.packager.PackagerBlockEntity;
 import com.simibubi.create.foundation.blockEntity.SmartBlockEntity;
@@ -20,7 +21,8 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-import static com.bunting.packagerchoked.PackagerChokedDataComponents.PACKAGE_STACK_NUM;
+import java.util.HashMap;
+import java.util.Map;
 
 @Mixin(PackagerBlockEntity.class)
 public abstract class MixinPackagerBlockEntity extends SmartBlockEntity {
@@ -29,6 +31,9 @@ public abstract class MixinPackagerBlockEntity extends SmartBlockEntity {
 
     @Unique
     float packagerchoked$stacksEmpty = 0.0f;
+
+    @Unique
+    Map<String, Float> packagerchoked$stacksMap = new HashMap<>();
 
     public MixinPackagerBlockEntity(BlockEntityType<?> type, BlockPos pos, BlockState state) {
         super(type, pos, state);
@@ -40,8 +45,9 @@ public abstract class MixinPackagerBlockEntity extends SmartBlockEntity {
             remap = false
     )
     private void packagerchoked$checkEmptyStackNum(CallbackInfo ci){
+        if (level == null || level.isClientSide()) return;
         IItemHandler targetInv = targetInventory.getInventory();
-        packagerchoked$stacksEmpty = StackNumberUtil.getEmptyStackNumber(targetInv);
+        packagerchoked$stacksEmpty = StackNumberUtil.getEmptyStackNumber(targetInv, packagerchoked$stacksMap);
     }
 
     @WrapMethod(
@@ -49,11 +55,20 @@ public abstract class MixinPackagerBlockEntity extends SmartBlockEntity {
             remap = false
     )
     private boolean packagerchoked$checkInsertResult(ItemStack box, boolean simulate, Operation<Boolean> original){
-        if (!box.has(PACKAGE_STACK_NUM)) {
-            box.set(PACKAGE_STACK_NUM, StackNumberUtil.getStackNumber(PackageItem.getContents(box)));
-        }
-        float boxStacks = box.get(PACKAGE_STACK_NUM);
+        if (level == null || level.isClientSide) return original.call(box, simulate);
+        Map<String, Float> boxMap = new HashMap<>();
+        float boxStacks = StackNumberUtil.getStackNumber(PackageItem.getContents(box), boxMap);
         if (boxStacks > packagerchoked$stacksEmpty) return false;
-        else return original.call(box, simulate);
+        Map<String, Float> stackMapCopy = new HashMap<>(packagerchoked$stacksMap);
+        for(Map.Entry<String, Float> entry : boxMap.entrySet()){
+            String key = entry.getKey();
+            Float value = entry.getValue();
+            Float partialSlot = stackMapCopy.getOrDefault(key, 0.0f);
+            Float emptySlot = stackMapCopy.getOrDefault("empty", 0.0f);
+            if (partialSlot + emptySlot < value) return false;
+            stackMapCopy.put(key, Math.max(partialSlot - value, 0.0f));
+            stackMapCopy.put("empty", Math.min(emptySlot + partialSlot - value, emptySlot));
+        }
+        return original.call(box, simulate);
     }
 }
